@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from .tasks import ping, process_csv_upload
-from .serializers import UploadCsvSerializer
+from .serializers import UploadCsvSerializer, CsvResultSerializer
 from .services.csv_parser import CsvFormatError, parse_csv
 from celery.result import AsyncResult
 
@@ -41,3 +41,20 @@ def task_status(_request: Request, task_id: str):
         "state": result.state,
         "info": result.info if isinstance(result.info, dict) else str(result.info) if result.info else None,
     })
+
+
+@api_view(["GET"])
+def list_csv_results(request: Request):
+    from .models import CsvResult
+
+    queryset = CsvResult.objects.all().order_by("-created_at")
+    search = request.query_params.get("search")
+    if search:
+        queryset = queryset.filter(stock_code__icontains=search)
+
+    from rest_framework.pagination import PageNumberPagination
+
+    paginator = PageNumberPagination()
+    page = paginator.paginate_queryset(queryset, request)
+    serializer = CsvResultSerializer(page, many=True)
+    return paginator.get_paginated_response(serializer.data)

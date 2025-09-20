@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from quotes.views import celery_health, upload_csv, task_status
+from quotes.views import celery_health, upload_csv, task_status, list_csv_results
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,4 +24,5 @@ urlpatterns = [
     path('health/celery/', celery_health),
     path('upload-csv/', upload_csv),
     path('tasks/<str:task_id>/', task_status),
+    path('csv-results/', list_csv_results),
 ]
