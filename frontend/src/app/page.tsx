@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useUploadStore } from "@/store/upload";
 import { Container, Stack, Typography, Alert, Paper, Table, TableHead, TableRow, TableCell, TableBody, Pagination, Button, TextField } from "@mui/material";
+import { useToastStore } from "@/store/toast";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -24,13 +25,15 @@ export default function Home() {
     refetchInterval: (q) => (q.state.data?.state === "SUCCESS" || q.state.data?.state === "FAILURE" ? false : 1500),
   });
 
+  const toast = useToastStore();
   const onUpload = async () => {
     if (!file) return;
     try {
       const res = await api.uploadCsv(file);
       setTaskId(res.task_id);
+      toast.show("Upload started", "success");
     } catch (e: any) {
-      alert(e.message || "Upload failed");
+      toast.show(e.message || "Upload failed", "error");
     }
   };
 
