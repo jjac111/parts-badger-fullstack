@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             name='CsvResult',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('stock_code', models.CharField(db_index=True, max_length=128)),
+                ('stock_code', models.CharField(db_index=True, max_length=100)),
                 ('number_quotes_found', models.IntegerField()),
                 ('total_price', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('file_uploaded', models.CharField(max_length=255)),
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             name='Part',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('stock_code', models.CharField(db_index=True, max_length=128, unique=True)),
+                ('stock_code', models.CharField(db_index=True, max_length=100, unique=True)),
                 ('description', models.CharField(blank=True, default='', max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
