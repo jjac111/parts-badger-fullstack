@@ -15,3 +15,12 @@ coverage/
 backend/.env
 backend/.env.local
 
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/.env.local
+frontend/.env
+frontend/.vercel/
+frontend/.eslintcache
+
