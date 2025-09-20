@@ -16,10 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from quotes.views import celery_health
+from quotes.views import celery_health, upload_csv
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('health/celery/', celery_health),
+    path('upload-csv/', upload_csv),
 ]
