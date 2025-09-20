@@ -6,4 +6,5 @@ pytest
 pytest-django
 factory_boy
 celery
+django-cors-headers
 
