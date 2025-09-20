@@ -6,6 +6,7 @@ from rest_framework import status
 from .tasks import ping, process_csv_upload
 from .serializers import UploadCsvSerializer
 from .services.csv_parser import CsvFormatError, parse_csv
+from celery.result import AsyncResult
 
 
 @api_view(["POST"])
@@ -31,4 +32,12 @@ def upload_csv(request: Request):
     task = process_csv_upload.delay(content, file_name=getattr(file_obj, "name", "upload.csv"))
     return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
 
-# Create your views here.
+
+@api_view(["GET"])
+def task_status(_request: Request, task_id: str):
+    result = AsyncResult(task_id)
+    return Response({
+        "task_id": task_id,
+        "state": result.state,
+        "info": result.info if isinstance(result.info, dict) else str(result.info) if result.info else None,
+    })
