@@ -25,7 +25,7 @@ def aggregate_quotes(stock_codes: Iterable[str]):
         QuoteLineItem.objects.filter(part_id__in=part_id_to_code.keys())  # type: ignore[attr-defined]
         .values("part_id")
         .annotate(
-            count=Count("id"),
+            count=Count("quote", distinct=True),
             total_price=Sum("price"),
         )
     )

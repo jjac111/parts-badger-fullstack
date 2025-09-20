@@ -26,7 +26,8 @@ def test_aggregate_counts_and_sums_per_stock_code():
 
     result = aggregate_quotes(["AAA", "BBB", "CCC"])  # CCC has no part
 
-    assert result["AAA"]["count"] == 2
+    # Distinct quotes for AAA: both items on q1 count as 1
+    assert result["AAA"]["count"] == 1
     assert result["AAA"]["total_price"] == decimal.Decimal("16.00")
     assert result["BBB"]["count"] == 1
     assert result["BBB"]["total_price"] == decimal.Decimal("2.00")
