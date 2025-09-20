@@ -1,9 +1,24 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useUploadStore } from "@/store/upload";
-import { Container, Stack, Typography, Alert, Paper, Table, TableHead, TableRow, TableCell, TableBody, Pagination, Button, TextField } from "@mui/material";
+import {
+  Container,
+  Stack,
+  Typography,
+  Alert,
+  Paper,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Pagination,
+  Button,
+  TextField,
+  LinearProgress,
+} from "@mui/material";
 import { useToastStore } from "@/store/toast";
 
 export default function Home() {
@@ -11,11 +26,19 @@ export default function Home() {
   const { taskId, setTaskId } = useUploadStore();
   const [file, setFile] = useState<File | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [isUploading, setIsUploading] = useState(false);
+  const [completedNotified, setCompletedNotified] = useState(false);
 
-  const { data: results } = useQuery({
-    queryKey: ["results", { search, page }],
-    queryFn: () => api.listResults({ search, page }),
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const { data: results, isLoading: isResultsLoading } = useQuery({
+    queryKey: ["results", { search: debouncedSearch, page }],
+    queryFn: () => api.listResults({ search: debouncedSearch, page }),
   });
 
   const { data: status } = useQuery({
@@ -29,17 +52,24 @@ export default function Home() {
   const onUpload = async () => {
     if (!file) return;
     try {
+      setIsUploading(true);
       const res = await api.uploadCsv(file);
       setTaskId(res.task_id);
       toast.show("Upload started", "success");
     } catch (e: any) {
       toast.show(e.message || "Upload failed", "error");
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  if (status?.state === "SUCCESS") {
-    queryClient.invalidateQueries({ queryKey: ["results"] });
-  }
+  useEffect(() => {
+    if (status?.state === "SUCCESS" && !completedNotified) {
+      setCompletedNotified(true);
+      queryClient.invalidateQueries({ queryKey: ["results"] });
+      toast.show("Processing complete", "success");
+    }
+  }, [status?.state, completedNotified, queryClient, toast]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -51,8 +81,8 @@ export default function Home() {
             <input hidden type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           </Button>
           <Typography variant="body2">{file?.name || "No file selected"}</Typography>
-          <Button variant="outlined" onClick={onUpload} disabled={!file}>
-            Upload
+          <Button variant="outlined" onClick={onUpload} disabled={!file || isUploading}>
+            {isUploading ? "Uploading..." : "Upload"}
           </Button>
         </Stack>
 
@@ -63,6 +93,7 @@ export default function Home() {
         )}
 
         <Paper sx={{ p: 2 }}>
+          {isResultsLoading && <LinearProgress sx={{ mb: 2 }} />}
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" mb={2}>
             <TextField
               label="Search by stock code"
