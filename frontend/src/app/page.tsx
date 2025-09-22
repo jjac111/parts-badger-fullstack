@@ -42,13 +42,18 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clearTaskTimerRef = useRef<number | null>(null);
   const lastTaskIdRef = useRef<string | null>(null);
+  const bannerStateRef = useRef<"PENDING" | "SUCCESS" | "FAILURE">("PENDING");
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(id);
   }, [search]);
 
-  const { data: results, isLoading: isResultsLoading } = useQuery<{
+  const {
+    data: results,
+    isLoading: isResultsLoading,
+    isFetching: isResultsFetching,
+  } = useQuery<{
     count: number;
     next: string | null;
     previous: string | null;
@@ -76,6 +81,7 @@ export default function Home() {
       const res = await api.uploadCsv(selectedFile);
       setTaskId(res.task_id);
       lastTaskIdRef.current = res.task_id;
+      bannerStateRef.current = "PENDING";
       toast.show("Upload started", "success");
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Upload failed";
@@ -103,9 +109,11 @@ export default function Home() {
       setCompletedNotified(true);
       queryClient.invalidateQueries({ queryKey: ["results"] });
       toast.show("Processing complete", "success");
+      bannerStateRef.current = "SUCCESS";
       if (clearTaskTimerRef.current) clearTimeout(clearTaskTimerRef.current);
       clearTaskTimerRef.current = window.setTimeout(() => {
         setTaskId(null);
+        setCompletedNotified(false);
         clearTaskTimerRef.current = null;
       }, 2000);
     } else if (status.state === "FAILURE") {
@@ -119,9 +127,11 @@ export default function Home() {
         return "Processing failed";
       })();
       toast.show(errorMsg, "error");
+      bannerStateRef.current = "FAILURE";
       if (clearTaskTimerRef.current) clearTimeout(clearTaskTimerRef.current);
       clearTaskTimerRef.current = window.setTimeout(() => {
         setTaskId(null);
+        setCompletedNotified(false);
         clearTaskTimerRef.current = null;
       }, 2000);
     }
@@ -143,22 +153,18 @@ export default function Home() {
               Upload a CSV to aggregate quotes by stock code.
             </Typography>
           </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-            <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv" onChange={handleFileSelected} />
-            <Button variant="contained" disableElevation onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-              {isUploading ? "Uploading..." : "Upload CSV"}
-            </Button>
-          </Stack>
-
-          <Fade in={Boolean(taskId)} timeout={{ enter: 250, exit: 300 }} unmountOnExit>
-            <Alert sx={{ borderRadius: 2 }} severity={status?.state === "SUCCESS" ? "success" : status?.state === "FAILURE" ? "error" : "info"}>
-              Task {lastTaskIdRef.current} — {status?.state === "SUCCESS" ? "COMPLETED" : status?.state || "PENDING"}
+          <Fade in={Boolean(taskId) || completedNotified} timeout={{ enter: 250, exit: 300 }} unmountOnExit>
+            <Alert
+              sx={{ borderRadius: 2 }}
+              severity={bannerStateRef.current === "SUCCESS" ? "success" : bannerStateRef.current === "FAILURE" ? "error" : "info"}
+            >
+              Task {lastTaskIdRef.current} — {bannerStateRef.current === "SUCCESS" ? "COMPLETED" : bannerStateRef.current}
             </Alert>
           </Fade>
 
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: "divider", bgcolor: "background.paper" }}>
             {isResultsLoading && <LinearProgress sx={{ mb: 2 }} />}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" mb={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent={{ xs: "flex-start", sm: "space-between" }} mb={2}>
               <TextField
                 label="Search by stock code"
                 size="small"
@@ -167,7 +173,12 @@ export default function Home() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
+                sx={{ width: { xs: "100%", sm: 320 } }}
               />
+              <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv" onChange={handleFileSelected} />
+              <Button variant="contained" disableElevation onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                {isUploading ? "Uploading..." : "Upload CSV"}
+              </Button>
             </Stack>
             {!isResultsLoading && (!results || (results?.count || 0) === 0) ? (
               <Alert severity="info">No results yet — upload a CSV to see aggregates.</Alert>
@@ -181,16 +192,18 @@ export default function Home() {
                     <TableCell>Created At</TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>
-                  {results?.results?.map((row: CsvResult) => (
-                    <TableRow key={`${row.stock_code}-${row.created_at}`}>
-                      <TableCell>{row.stock_code}</TableCell>
-                      <TableCell align="right">{row.number_quotes_found}</TableCell>
-                      <TableCell align="right">{Number(row.total_price).toLocaleString()}</TableCell>
-                      <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
+                <Fade in={!isResultsFetching} timeout={{ enter: 200, exit: 120 }}>
+                  <TableBody>
+                    {results?.results?.map((row: CsvResult) => (
+                      <TableRow key={`${row.stock_code}-${row.created_at}`}>
+                        <TableCell>{row.stock_code}</TableCell>
+                        <TableCell align="right">{row.number_quotes_found}</TableCell>
+                        <TableCell align="right">{Number(row.total_price).toLocaleString()}</TableCell>
+                        <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Fade>
               </Table>
             )}
             <Stack alignItems="flex-end" mt={2}>
