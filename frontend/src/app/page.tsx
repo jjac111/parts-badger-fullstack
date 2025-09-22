@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useUploadStore } from "@/store/upload";
@@ -21,32 +22,48 @@ import {
 } from "@mui/material";
 import { useToastStore } from "@/store/toast";
 
+type CsvResult = {
+  stock_code: string;
+  number_quotes_found: number;
+  total_price: number;
+  created_at: string;
+};
+
 export default function Home() {
   const queryClient = useQueryClient();
   const { taskId, setTaskId } = useUploadStore();
-  const [file, setFile] = useState<File | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [isUploading, setIsUploading] = useState(false);
   const [completedNotified, setCompletedNotified] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const clearTaskTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(id);
   }, [search]);
 
-  const { data: results, isLoading: isResultsLoading } = useQuery({
+  const { data: results, isLoading: isResultsLoading } = useQuery<{
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: CsvResult[];
+  }>({
     queryKey: ["results", { search: debouncedSearch, page }],
     queryFn: () => api.listResults({ search: debouncedSearch, page }),
   });
 
-  const { data: status } = useQuery({
+  type TaskStatus = { task_id: string; state: string; info: Record<string, unknown> | string | null };
+  const { data: status } = useQuery<TaskStatus>({
     queryKey: ["task", taskId],
     queryFn: () => api.taskStatus(taskId!),
     enabled: Boolean(taskId),
-    refetchInterval: (q) => (q.state.data?.state === "SUCCESS" || q.state.data?.state === "FAILURE" ? false : 1500),
+    refetchInterval: 1500,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: false,
+    retry: 3,
   });
 
   const toast = useToastStore();
@@ -56,8 +73,9 @@ export default function Home() {
       const res = await api.uploadCsv(selectedFile);
       setTaskId(res.task_id);
       toast.show("Upload started", "success");
-    } catch (e: any) {
-      toast.show(e.message || "Upload failed", "error");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Upload failed";
+      toast.show(message, "error");
     } finally {
       setIsUploading(false);
     }
@@ -66,18 +84,50 @@ export default function Home() {
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
-    setFile(selected);
+    setCompletedNotified(false);
+    if (clearTaskTimerRef.current) {
+      clearTimeout(clearTaskTimerRef.current);
+      clearTaskTimerRef.current = null;
+    }
     await onUpload(selected);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   useEffect(() => {
-    if (status?.state === "SUCCESS" && !completedNotified) {
+    if (!status?.state || completedNotified) return;
+    if (status.state === "SUCCESS") {
       setCompletedNotified(true);
       queryClient.invalidateQueries({ queryKey: ["results"] });
       toast.show("Processing complete", "success");
+      if (clearTaskTimerRef.current) clearTimeout(clearTaskTimerRef.current);
+      clearTaskTimerRef.current = window.setTimeout(() => {
+        setTaskId(null);
+        clearTaskTimerRef.current = null;
+      }, 2000);
+    } else if (status.state === "FAILURE") {
+      setCompletedNotified(true);
+      const errorMsg = (() => {
+        if (typeof status.info === "string") return status.info;
+        if (status.info && typeof status.info === "object") {
+          const maybeError = (status.info as { error?: unknown }).error;
+          if (typeof maybeError === "string") return maybeError;
+        }
+        return "Processing failed";
+      })();
+      toast.show(errorMsg, "error");
+      if (clearTaskTimerRef.current) clearTimeout(clearTaskTimerRef.current);
+      clearTaskTimerRef.current = window.setTimeout(() => {
+        setTaskId(null);
+        clearTaskTimerRef.current = null;
+      }, 2000);
     }
-  }, [status?.state, completedNotified, queryClient, toast]);
+  }, [status?.state, completedNotified, queryClient, toast, setTaskId, status?.info]);
+
+  useEffect(() => {
+    return () => {
+      if (clearTaskTimerRef.current) clearTimeout(clearTaskTimerRef.current);
+    };
+  }, []);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -99,8 +149,8 @@ export default function Home() {
         </Stack>
 
         {taskId && (
-          <Alert severity="info">
-            Task {taskId} — {status?.state || "PENDING"}
+          <Alert severity={status?.state === "SUCCESS" ? "success" : status?.state === "FAILURE" ? "error" : "info"}>
+            Task {taskId} — {status?.state === "SUCCESS" ? "COMPLETED" : status?.state || "PENDING"}
           </Alert>
         )}
 
@@ -130,7 +180,7 @@ export default function Home() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {results?.results?.map((row: any) => (
+                {results?.results?.map((row: CsvResult) => (
                   <TableRow key={`${row.stock_code}-${row.created_at}`}>
                     <TableCell>{row.stock_code}</TableCell>
                     <TableCell align="right">{row.number_quotes_found}</TableCell>
