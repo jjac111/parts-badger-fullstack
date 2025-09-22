@@ -56,12 +56,5 @@ samples/    # Example CSVs
 docs/       # Planning notes
 ```
 
-### Considerations
-- The CSV must include the exact header `stock_code`.
-- For large files, consider upload size limits and streaming strategies.
-- If the frontend port changes, update CORS and `NEXT_PUBLIC_API_BASE_URL`.
-
-### Purpose
-Provide a reliable, repeatable workflow to analyze quoting activity by stock code.
 
 
